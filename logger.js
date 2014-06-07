@@ -171,8 +171,11 @@ exports.Logger = function() {
     exports.db.get(
       "select data from events where class not in ('VERSION', 'DEVICES', 'DEVICE', 'WATCH', 'REPLAY') order by timestamp desc limit 1",
       function(err, row) {
-        self.sendResponse(JSON.parse(row.data));
-    });
+        if (row) {
+          self.sendResponse(JSON.parse(row.data));
+        }
+      }
+    );
   });
 
   self.on('receiveCommand_REPLAY', function (params) {
@@ -182,13 +185,15 @@ exports.Logger = function() {
         params.from,
         function(err, row) {
           self.sendResponse(JSON.parse(row.data));
-      });
+        }
+      );
     } else {
       exports.db.each(
         "select data from events where class not in ('VERSION', 'DEVICES', 'DEVICE', 'WATCH', 'REPLAY') order by timestamp asc",
         function(err, row) {
           self.sendResponse(JSON.parse(row.data));
-      });
+        }
+      );
     }
   });
 
