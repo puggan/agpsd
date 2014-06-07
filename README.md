@@ -55,6 +55,6 @@ one value.
 
 Take GPS input from the gpsd och agpsd running at localhost:2947 and
 dump to the (sqlite) database mydb.db. Listen for incoming connections
-(gpsd protocol) on 4711. Also try to connect to port 3712 on
+(gpsd protocol) on 4711. Also try to connect to port 4712 on
 someserver and send data to it using a role-reversed gpsd protocol
 (client pretends to be server, server pretends to be client).
