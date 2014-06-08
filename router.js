@@ -35,7 +35,18 @@ exports.Router = function() {
   });
 
   self.on('receiveCommand_WATCH', function (params) {
-    self.watch = params.enable;
+    // OpenCPN only send: { class: 'WATCH', nmea: true }
+    if (typeof params.enable == 'undefined') {
+      if (typeof params.nmea != 'undefined') {
+        self.watch = params.nmea;
+      }
+      else if (typeof params.json != 'undefined') {
+        self.watch = params.json;
+      }
+    }
+    else {
+      self.watch = params.enable;
+    }
   });
 
   self.on('receiveCommand_REPLAY', function (params) {
@@ -49,10 +60,16 @@ exports.Router = function() {
     for (var name in exports.serverSockets) {
       var serverSocket = exports.serverSockets[name];
       if (serverSocket.watch) {
-        serverSocket.sendResponse(response);
+        if (serverSocket.nmea) {
+          serverSocket.responseConvertNmea(response);
+        }
+        else {
+          serverSocket.sendResponse(response);
+        }
       }
     }
   });
+
 
   self.emit("directionChange", self.isClient);
 

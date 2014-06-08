@@ -14,6 +14,7 @@ exports.WireProtocol = function(stream, isClient, reverseRoles) {
   self.closed = false;
   self.data = "";
   self.stream = stream;
+  self.nmea = false;
 
   var remote = self.stream.remoteAddress;
   if (remote == "127.0.0.1" || remote == "localhost") {
@@ -66,10 +67,12 @@ exports.WireProtocol = function(stream, isClient, reverseRoles) {
   };
 
   self.stream.on('data', function(data) {
-    self.data += data;
+    self.data += data + '\r\n';
     try {
-      var _terminator = /^([^\r\n]*[\r\n][\r\n]?)/;
+      var _terminator = /^([^\r\n]*[\r\n]+)/;
+      var rows = 0;
       while (results = _terminator.exec(self.data)) {
+        rows++;
         var line = results[1];
         self.data = self.data.slice(line.length);
         if (line.indexOf("?") == 0) {
@@ -90,6 +93,9 @@ exports.WireProtocol = function(stream, isClient, reverseRoles) {
           self.emit('receiveResponse', response);
         }
       };
+      if(!rows && argv.options.verbose && underscore.include(argv.options.verbose, 'data')) {
+        console.log({'recived rows': rows});
+      }
     } catch (e) {
       console.log("Protocol error: " + e.toString());
       console.log(e.stack);
@@ -172,15 +178,33 @@ exports.WireProtocol = function(stream, isClient, reverseRoles) {
   });
 
   self.on('receiveCommand_WATCH', function (params) {
-    if (!params.json) console.log("UNSUPPORTED WATCH");
-    var data = underscore.extend({class: 'WATCH',
-                                   enable: true,
-                                   json: true,
-                                   nmea: false,
-                                   raw: 0,
-                                   scaled: false,
-                                   timing: false }, params);   
-    self.sendResponse(data);
+    if (params.json) {
+      var data = underscore.extend({class: 'WATCH',
+        enable: true,
+        json: true,
+        nmea: false,
+        raw: 0,
+        scaled: false,
+        timing: false }, params);
+      self.sendResponse(data);
+    }
+    else if (params.nmea) {
+      console.log(params);
+      var data = underscore.extend({class: 'WATCH',
+        enable: true,
+        json: false,
+        nmea: true,
+        raw: 0,
+        scaled: false,
+        timing: false }, params);
+      self.nmea = true;
+      self.sendResponse(data);
+    }
+    else {
+      var data = underscore.extend({class: 'WATCH', enable: false }, params);
+      self.sendResponse(data);
+      console.log("UNSUPPORTED WATCH");
+    }
   });
 
   self.on('receiveComnmand_REPLAY', function (params) {
@@ -196,6 +220,90 @@ exports.WireProtocol = function(stream, isClient, reverseRoles) {
                        proto_minor: 6,
                        capabilities: ["replay", "reverseroles"]});
   });
+
+  self.sendNmeaResponse = function(nmea) {
+    if (self.closed) return;
+    var checksum = 0;
+
+    for(var char_pos = 0; char_pos < nmea.length; char_pos++) {
+      checksum = checksum ^ nmea.charCodeAt(char_pos);
+    }
+
+    var hexsum = Number(checksum).toString(16).toUpperCase();
+    hexsum = ("00" + hexsum).slice(-2);
+
+    nmea = '$' + nmea + '*' + hexsum;
+
+    if (argv.options.verbose && underscore.include(argv.options.verbose, 'data')) {
+      console.log(nmea);
+    }
+
+    self.stream.write(nmea, function (err) {
+      if (err) {
+        console.error(err);
+        self.stream.emit("end");
+      }
+    });
+  }
+  self.responseConvertNmea = function (response) {
+    if (response.class == 'SKY') {
+      var nmea = [ 'GPGSA', 'A', 3 ];
+
+      var sat_count = 0;
+      for(var sat_pos in response.satellites)
+      {
+        if (response.satellites[sat_pos].used)
+        {
+          nmea[3 + sat_count] = response.satellites[sat_pos].PRN;
+          sat_count++;
+        }
+        if (sat_count >= 12) {
+          break;
+        }
+      }
+
+      nmea[15] = response.pdop;
+      nmea[16] = response.hdop;
+      nmea[17] = response.vdop;
+
+      self.sendNmeaResponse(nmea.join(','));
+    }
+    else if (response.class == 'TPV') {
+      if(response.mode == 2 || response.mode == 3)
+      {
+        var timestamp = response.time.substr(11, 8).replace(/:/g, '');
+        var date = response.time.substr(8, 2) + response.time.substr(5, 2) + response.time.substr(2, 2);
+
+        var lat_sign = Math.sign(response.lat);
+        var lat_degrees = Math.floor(response.lat * lat_sign);
+        var lat_min = (response.lat - lat_degrees) * 60;
+        var lat = lat_degrees * 100 + lat_min;
+        lat_sign = (lat_sign < 0) ? 'E' : 'W';
+
+        var lon_sign = Math.sign(response.lon);
+        var lon_degrees = Math.floor(response.lon * lon_sign);
+        var lon_min = (response.lon - lon_degrees) * 60;
+        var lon = lon_degrees * 100 + lon_min;
+        lon_sign = (lon_sign < 0) ? 'S' : 'N';
+
+        var nmea = [
+          'GPRMC',
+          timestamp,
+          'A',
+          lat,
+          lat_sign,
+          lon,
+          lon_sign,
+          response.speed,
+          response.track,
+          date,
+          0, //response.epd;
+          'E'];
+
+        self.sendNmeaResponse(nmea.join(','));
+      }
+    }
+  };
 
   if (!self.isClient) {
     setTimeout(function () { self.emit("serverInitialResponse"); }, 0);
