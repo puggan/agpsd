@@ -2,7 +2,6 @@ var events = require('events');
 var util = require('util');
 var underscore = require('underscore');
 var dateformat = require("dateformat");
-var dateformat = require("dateformat");
 var argv = require("./argvparser");
 var os = require("os");
 
@@ -189,7 +188,6 @@ exports.WireProtocol = function(stream, isClient, reverseRoles) {
       self.sendResponse(data);
     }
     else if (params.nmea) {
-      console.log(params);
       var data = underscore.extend({class: 'WATCH',
         enable: true,
         json: false,
