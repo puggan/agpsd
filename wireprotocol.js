@@ -35,6 +35,16 @@ exports.WireProtocol = function(stream, isClient, reverseRoles) {
   });
 
   stream.on("end", function () {
+    if (argv.options.verbose && underscore.include(argv.options.verbose, 'disconnect')) {
+      console.log("Connection ended from " + self.name);
+    }
+    self.closed = true;
+  });
+
+  stream.on("close", function () {
+    if (argv.options.verbose && underscore.include(argv.options.verbose, 'disconnect')) {
+      console.log("Connection closed from " + self.name);
+    }
     self.closed = true;
   });
 

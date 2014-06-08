@@ -25,6 +25,11 @@ exports.StreamInput = function(stream, reverseRoles) {
       console.log("End");
     }
   });
+  stream.on("close", function () {
+    if (argv.options.verbose && underscore.include(argv.options.verbose, 'disconnect')) {
+      console.log("Close");
+    }
+  });
   protocol.Protocol.call(self, stream, true, reverseRoles);
 }
 util.inherits(exports.StreamInput, protocol.Protocol);
