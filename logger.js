@@ -31,6 +31,7 @@ exports.init = function(db, cb) {
 
       async.map(
         ["create table events (id integer primary key autoincrement, timestamp timestamp, class varchar(32), data text, device varchar(256), lat real, lon real)",
+         "create index if not exists timestamp on events (timestamp)",
          "create table vessels (id integer primary key autoincrement, mmsi varchar(256), last_seen integer references events(id))",
          "create table events_ais (id integer references events(id), vessel_id integer references vessels(id))",
          "create table devices (id integer primary key autoincrement, name varchar(256), last_seen integer references events(id))"],
@@ -169,8 +170,7 @@ exports.Logger = function() {
 
   self.on('receiveCommand_WATCH', function (params) {
     exports.db.get(
-      "select data from events where class not in ('VERSION', 'DEVICES', 'DEVICE', 'WATCH', 'REPLAY') and where device = $name order by timestamp desc limit 1",
-      {$name: data.path},
+      "select a.device, a.timestamp, a.data from events as a left join events as b on (a.device = b.device and (b.timestamp > a.timestamp or (b.timestamp = a.timestamp and b.id > a.id))) where class not in ('VERSION', 'DEVICES', 'DEVICE', 'WATCH', 'REPLAY') and a.device > '' and b.timestamp is null",
       function(err, row) {
         if (row) {
           self.sendResponse(JSON.parse(row.data));
