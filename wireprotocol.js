@@ -82,6 +82,7 @@ exports.WireProtocol = function(stream, isClient, reverseRoles) {
       };
     } catch (e) {
       console.log("Protocol error: " + e.toString());
+      console.log(e.stack);
       self.closed = true;
       self.stream.end()
     }
